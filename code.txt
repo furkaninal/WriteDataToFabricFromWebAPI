@@ -1,0 +1,33 @@
+import requests
+from pyspark.sql import SparkSession
+from pyspark.sql import Row
+from delta import *
+
+url = 'https://anlikaltinpiyasasi.com/data.json'
+
+response = requests.get(url)
+response.raise_for_status()
+data = response.json()
+
+print("Data samples:", data[:2]) 
+
+spark = SparkSession.builder.appName("JsonToDelta").getOrCreate()
+
+df = spark.createDataFrame([Row(**item) for item in data])
+
+df.show(truncate=False)
+df.printSchema()
+
+
+delta_table_path = "Tables/<tableName>"
+
+df.write.format("delta").mode("overwrite").save(delta_table_path)
+
+spark.sql(f"""
+    CREATE TABLE IF NOT EXISTS <LakeHouseName>.<tableName>
+    USING DELTA
+    LOCATION '{delta_table_path}'
+""")
+
+user_df = spark.sql("SELECT * FROM <LakeHouseName>.<tableName> LIMIT 1000")
+user_df.show(truncate=False)
